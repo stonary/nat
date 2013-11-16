@@ -1,0 +1,17 @@
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/simplerouter/!svn/ver/2/trunk/http_server1
+END
+index.html
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/simplerouter/!svn/ver/2/trunk/http_server1/index.html
+END
+webserver.py
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/simplerouter/!svn/ver/2/trunk/http_server1/webserver.py
+END
