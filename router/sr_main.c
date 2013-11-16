@@ -44,6 +44,11 @@ extern char* optarg;
 #define DEFAULT_SERVER "localhost"
 #define DEFAULT_RTABLE "rtable"
 #define DEFAULT_TOPO 0
+#define DEFAULT_ICMP_MAPPING_TIMEOUT 60
+#define DEFAULT_TCP_SYN_TIMEOUT 7440
+#define DEFAULT_TCP_TRANS_IDLE_TIMEOUT 300
+/* TODO simply mark this for now, there's probably a better way */
+#define DEFAULT_NAT 0
 
 static void usage(char* );
 static void sr_init_instance(struct sr_instance* );
@@ -65,11 +70,20 @@ int main(int argc, char **argv)
     unsigned int port = DEFAULT_PORT;
     unsigned int topo = DEFAULT_TOPO;
     char *logfile = 0;
+    /**
+     * NAT settings over here:
+     * (sign/unsiged int - does it matter here?)
+     */
+    unsigned int icmp_mto = DEFAULT_ICMP_MAPPING_TIMEOUT;
+    unsigned int tcp_syn_mto = DEFAULT_TCP_SYN_TIMEOUT;
+    unsigned int tcp_idle_mto = DEFAULT_TCP_TRANS_IDLE_TIMEOUT;
+    int nat = DEFAULT_NAT;
+
     struct sr_instance sr;
 
     printf("Using %s\n", VERSION_INFO);
 
-    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:")) != EOF)
+    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:nI:E:R:")) != EOF)
     {
         switch (c)
         {
@@ -101,6 +115,23 @@ int main(int argc, char **argv)
             case 'T':
                 template = optarg;
                 break;
+            case 'n':
+            	nat = 1;
+            	printf("nat: %d\n", nat);
+            	break;
+            case 'I':
+            	icmp_mto = atoi((char *) optarg);
+            	printf("icmp mto: %d\n", icmp_mto);
+            	break;
+            case 'E':
+            	tcp_syn_mto = atoi((char *) optarg);
+            	printf("tcp syn mto: %d\n", tcp_syn_mto);
+            	break;
+            case 'R':
+            	tcp_idle_mto = atoi((char *) optarg);
+            	printf("tcp idle mto: %d\n", tcp_idle_mto);
+            	break;
+
         } /* switch */
     } /* -- while -- */
 
