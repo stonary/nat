@@ -3,12 +3,6 @@ svn:wc:ra_dav:version-url
 V 52
 /svn/simplerouter/!svn/ver/2/trunk/pox_module/csc458
 END
-VNSProtocol.py
-K 25
-svn:wc:ra_dav:version-url
-V 67
-/svn/simplerouter/!svn/ver/2/trunk/pox_module/csc458/VNSProtocol.py
-END
 __init__.py
 K 25
 svn:wc:ra_dav:version-url
@@ -26,4 +20,10 @@ K 25
 svn:wc:ra_dav:version-url
 V 65
 /svn/simplerouter/!svn/ver/2/trunk/pox_module/csc458/srhandler.py
+END
+VNSProtocol.py
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/simplerouter/!svn/ver/2/trunk/pox_module/csc458/VNSProtocol.py
 END

@@ -20,10 +20,8 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     /* Fill this in */
 	struct sr_arpreq *cur_req = sr->cache.requests;
 	struct sr_arpreq *next_req = NULL;
-	printf("[DEBUG] sweep preqs...\n");
 	while (cur_req != NULL) {
 		next_req = cur_req->next;
-		// Needs to change the signature of the function
 		sr_handle_arpreq(sr,cur_req);
 		cur_req = next_req;
 	}

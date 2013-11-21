@@ -3,12 +3,6 @@ svn:wc:ra_dav:version-url
 V 61
 /svn/simplerouter/!svn/ver/2/trunk/pox_module/csc458.egg-info
 END
-PKG-INFO
-K 25
-svn:wc:ra_dav:version-url
-V 70
-/svn/simplerouter/!svn/ver/2/trunk/pox_module/csc458.egg-info/PKG-INFO
-END
 dependency_links.txt
 K 25
 svn:wc:ra_dav:version-url
@@ -32,4 +26,10 @@ K 25
 svn:wc:ra_dav:version-url
 V 75
 /svn/simplerouter/!svn/ver/2/trunk/pox_module/csc458.egg-info/top_level.txt
+END
+PKG-INFO
+K 25
+svn:wc:ra_dav:version-url
+V 70
+/svn/simplerouter/!svn/ver/2/trunk/pox_module/csc458.egg-info/PKG-INFO
 END
