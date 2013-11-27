@@ -32,6 +32,7 @@
 #include "sr_dumper.h"
 #include "sr_router.h"
 #include "sr_rt.h"
+#include "sr_nat.h"
 
 extern char* optarg;
 
@@ -62,6 +63,8 @@ static void sr_load_rt_wrap(struct sr_instance* sr, char* rtable);
 
 int main(int argc, char **argv)
 {
+
+	
 	int c;
 	char *host   = DEFAULT_HOST;
 	char *user = 0;
@@ -188,6 +191,10 @@ int main(int argc, char **argv)
 		sr_load_rt_wrap(&sr, rtable);
 	}
 
+	
+	if (nat){
+		
+	}
 	/* call router init (for arp subsystem etc.) */
 	sr_init(&sr);
 

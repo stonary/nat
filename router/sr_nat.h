@@ -32,7 +32,7 @@ struct sr_nat_mapping {
 struct sr_nat {
   /* add any fields here */
   struct sr_nat_mapping *mappings;
-
+  uint16_t global_auxext = 1024;
   /* threading */
   pthread_mutex_t lock;
   pthread_mutexattr_t attr;

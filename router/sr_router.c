@@ -22,6 +22,8 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
+#include "sr_nat.h"
+
 int sr_checkIPchecksum(sr_ip_hdr_t *iphdr);
 void sr_handleIPforwarding(struct sr_instance* sr,
 			   uint8_t * packet/* lent */,
@@ -87,6 +89,7 @@ void sr_init(struct sr_instance* sr)
 	pthread_t thread;
 	
 	pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
+	
 	
 	/* Add initialization code here! */
 	/* TODO: load static routing table??? */
