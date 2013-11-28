@@ -56,6 +56,7 @@ int sr_nat_destroy(struct sr_nat *nat) {  /* Destroys the nat (free memory) */
 
 void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
   struct sr_nat *nat = (struct sr_nat *)nat_ptr;
+  uint16_t timeout;
   while (1) {
     sleep(1.0);
     pthread_mutex_lock(&(nat->lock));
@@ -69,7 +70,15 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
 	
 	while(cur){
 		cur_next = cur->next;
-		if(curtime - cur->last_updated <= 60){
+		
+		switch (cur->type){
+			case nat_mapping_icmp:
+				timeout = nat->icmp_timeout;
+				break;
+			/* TODO: switch between establish and transitory*/
+		}
+		
+		if(curtime - cur->last_updated <= timeout){
 			cur->next = nat->mapping;
 			nat->mapping = cur;
 		} else {
@@ -78,7 +87,6 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
 		cur = cur_next;
 	}
 	
-
     pthread_mutex_unlock(&(nat->lock));
   }
   return NULL;

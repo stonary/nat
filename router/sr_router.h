@@ -52,6 +52,7 @@ struct sr_instance
     struct sr_if* if_list; /* list of interfaces */
     struct sr_rt* routing_table; /* routing table */
     struct sr_arpcache cache;   /* ARP cache */
+	struct sr_sr_nat nat;
     pthread_attr_t attr;
     FILE* logfile;
 };
@@ -65,7 +66,7 @@ int sr_connect_to_server(struct sr_instance* ,unsigned short , char* );
 int sr_read_from_server(struct sr_instance* );
 
 /* -- sr_router.c -- */
-void sr_init(struct sr_instance* );
+void sr_init(struct sr_instance*, int nat_enable);
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
 void sr_handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req);
 /* -- sr_if.c -- */

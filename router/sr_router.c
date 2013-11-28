@@ -65,6 +65,16 @@ void sr_sendARPreply(struct sr_instance* sr,
 int sr_checkInterface(struct sr_instance * sr, uint32_t target);
 int sr_checkICMPchecksum(sr_icmp_hdr_t *icmp_hdr, int len);
 
+void sr_sendNATpacket(struct sr_instance* sr,
+			   uint8_t * packet/* lent */,
+			   unsigned int len,
+			   char* interface/* lent */);
+			   
+void sr_receiveNATpacket(struct sr_instance* sr,
+			   uint8_t * packet/* lent */,
+			   unsigned int len,
+			   char* interface/* lent */);
+
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -74,7 +84,7 @@ int sr_checkICMPchecksum(sr_icmp_hdr_t *icmp_hdr, int len);
  *
  *---------------------------------------------------------------------*/
 
-void sr_init(struct sr_instance* sr)
+void sr_init(struct sr_instance* sr, int nat_enable)
 {
 	/* REQUIRES */
 	assert(sr);
@@ -90,13 +100,21 @@ void sr_init(struct sr_instance* sr)
 	
 	pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
 	
-	
-	/* Add initialization code here! */
-	/* TODO: load static routing table??? */
 	int result = sr_load_rt(sr, "rtable");
 	if (result) {
 		fprintf(stderr, "Failed loading routing table..");
 		return;
+	}
+	
+		
+	/* Enable NAT */
+	if (nat_enable){
+		sr_nat_init(&(sr->nat));
+		sr->nat_enable = 1;
+		
+		/* set internal external iface for nat */
+		sr->nat.int_iface =  sr_get_interface(sr,"eth1");
+		
 	}
 	
 } /* -- sr_init -- */
@@ -179,6 +197,13 @@ void sr_handlepacket(struct sr_instance* sr,
 			
 			if (sr_checkInterface(sr, iphdr->ip_dst)){
 				/* If it's an ICMP protocol */
+				
+				if (sr->nat_enable && iphdr->ip_dst == sr->nat.int_iface->ip){
+						/* Some one send packet to NAT client*/
+						sr_receiveNATpacket(sr, packet, len, interface);
+						return;
+				}		
+				
 				if (ip_protocol((uint8_t *) iphdr) == ip_protocol_icmp) {
 					/* Checking checksum for ICMP */
 					
@@ -213,6 +238,12 @@ void sr_handlepacket(struct sr_instance* sr,
 					sr_sendICMPMsg(sr,11,0,interface,packet,len);
 					return;
 				}
+				
+				if (sr->nat_enable && interface == "eth1"){
+					sr_sendNATpacket(sr, packet, len, interface);
+					return;
+				}
+				
 				sr_handleIPforwarding(sr, packet, len, interface);
 				return;
 			}
@@ -741,4 +772,81 @@ setEthernetHeader(sr_ethernet_hdr_t *new_ethhdr, uint8_t *ether_dhost,
 	return;
 }
 
+/*
+ * Set the new ethernet hdr as reply of the old one.
+ */
+void
+sr_sendNATpacket(struct sr_instance* sr,
+			   uint8_t * packet/* lent */,
+			   unsigned int len,
+			   char* interface/* lent */)
+{
+	/* NAT before forwarding */
+	
+	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
+	
+	if (sr->nat_enable && interface == "eth1"){
+		/* from internal interface */
+		struct sr_nat_mapping tmp;
+		sr_nat_mapping_type packet_type;
+		switch (iphdr->ip_p){
+			case ip_protocol_icmp:
+				/* ICMP */
+				packet_type = nat_mapping_icmp;
+				sr_icmp_hdr_t *icmphdr = (sr_icmp_hdr_t *) (iphdr + sizeof(sr_ip_hdr_t));
+				tmp = sr_nat_lookup_internal(sr->nat,iphdr->ip_src,icmphdr->icmp_id,packet_type);
+				if (tmp == NULL){
+					tmp = sr_nat_insert_mapping(sr->nat,iphdr->ip_src,icmphdr->icmp_id,packet_type);
+
+				}
+				iphdr->ip_src = sr->nat.ext_iface->ip;
+				icmphdr->icmp_id = tmp->aux_ext;
+				free(tmp);
+				break;
+			case ip_protocol_tcp:
+				/* TCP */
+				packet_type = nat_mapping_tcp;
+				break;
+		}
+	}
+	
+	return;
+}
+
+void
+sr_receiveNATpacket(struct sr_instance* sr,
+			   uint8_t * packet/* lent */,
+			   unsigned int len,
+			   char* interface/* lent */)
+{
+	/* NAT before forwarding */
+	
+	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
+	
+	if (sr->nat_enable && interface != "eth1"){
+		/* from external interface */
+		struct sr_nat_mapping tmp;
+		sr_nat_mapping_type packet_type;
+		switch (iphdr->ip_p){
+			case ip_protocol_icmp:
+				/* ICMP */
+				packet_type = nat_mapping_icmp;
+				sr_icmp_hdr_t *icmphdr = (sr_icmp_hdr_t *) (iphdr + sizeof(sr_ip_hdr_t));
+				tmp = sr_nat_lookup_internal(sr->nat,iphdr->ip_src,icmphdr->icmp_id,packet_type);
+				if (tmp == NULL){
+					/*TODO handle this case*/
+				}
+				iphdr->ip_src = sr->nat.int_iface->ip;
+				
+				icmphdr->icmp_id = tmp->aux_int;
+				free(tmp);
+				break;
+			case ip_protocol_tcp:
+				/* TCP */
+				packet_type = nat_mapping_tcp;
+				break;
+		}
+	}
+	return;
+}
 

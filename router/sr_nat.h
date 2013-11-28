@@ -33,6 +33,13 @@ struct sr_nat {
   /* add any fields here */
   struct sr_nat_mapping *mappings;
   uint16_t global_auxext = 1024;
+  
+  uint16_t icmp_timeout;
+  uint16_t tcp_establish_timeout;
+  uint16_t tcp_transitory_timeout;
+  
+  struct sr_if *int_iface;
+  
   /* threading */
   pthread_mutex_t lock;
   pthread_mutexattr_t attr;
