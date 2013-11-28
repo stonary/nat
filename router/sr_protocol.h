@@ -84,6 +84,9 @@ struct sr_icmp_hdr {
   uint8_t icmp_code;
   uint16_t icmp_sum;
   
+  /*TODO: need to test if it works with our old code*/
+  uint16_t icmp_id;
+  uint16_t icmp_seq;
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_hdr sr_icmp_hdr_t;
 
@@ -183,6 +186,36 @@ struct sr_arp_hdr
     uint32_t        ar_tip;             /* target IP address            */
 } __attribute__ ((packed)) ;
 typedef struct sr_arp_hdr sr_arp_hdr_t;
+
+struct sr_tcp_hdr {
+ unsigned short th_sport;  /* source port */
+ unsigned short th_dport;  /* destination port */
+ uint32_t th_seq;   /* sequence number */
+ uint32_t th_ack;   /* acknowledgement number */
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+ u_int th_x2:4,  /* (unused) */
+  th_off:4;  /* data offset */
+#endif
+#if __BYTE_ORDER == __BIG_ENDIAN
+ u_int th_off:4,  /* data offset */
+  th_x2:4;  /* (unused) */
+#endif
+ unsigned char  th_flags;
+#define TH_FIN 0x01
+#define TH_SYN 0x02
+#define TH_RST 0x04
+#define TH_PUSH 0x08
+#define TH_ACK 0x10
+#define TH_URG 0x20
+#define TH_ECE 0x40
+#define TH_CWR 0x80
+#define TH_FLAGS (TH_FIN|TH_SYN|TH_RST|TH_ACK|TH_URG|TH_ECE|TH_CWR)
+
+ unsigned short th_win;   /* window */
+ unsigned short th_sum;   /* checksum */
+ unsigned short th_urp;   /* urgent pointer */
+};
+typedef struct sr_tcp_hdr sr_tcp_hdr_t;
 
 #define sr_IFACE_NAMELEN 32
 

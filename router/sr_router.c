@@ -806,6 +806,29 @@ sr_sendNATpacket(struct sr_instance* sr,
 			case ip_protocol_tcp:
 				/* TCP */
 				packet_type = nat_mapping_tcp;
+				
+				sr_tcp_hdr_t *tcphdr = (sr_tcp_hdr_t *) (iphdr + sizeof(sr_ip_hdr_t));
+				tmp = sr_nat_lookup_internal(sr->nat,iphdr->ip_src,tcphdr->th_sport,packet_type);
+				
+				if (tmp == NULL){
+					tmp = sr_nat_insert_mapping(sr->nat,iphdr->ip_src,tcphdr->th_sport,packet_type);
+				}
+				
+				/* look up connection*/
+				
+				
+				
+				
+				if (tcphdr->flags )
+				
+				iphdr->ip_src = sr->nat.ext_iface->ip;
+				tcphdr->th_sport = tmp->aux_ext;
+				
+				/* TODO: Update TCP checksum*/
+				
+				
+				
+				
 				break;
 		}
 	}

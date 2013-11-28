@@ -153,10 +153,12 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   struct sr_nat_mapping *new = (struct sr_nat_mapping *)malloc(sizeof(struct sr_nat_mapping));
   new->type = type;
   new->ip_int = ip_int;
-  /* TODO: need to find ip_ext*/
+  new->ip_ext = nat->ext_iface->ip;
+
   new->aux_int = aux_int;
   new->aux_ext = nat->global_auxext++;
   new->last_updated = time(NULL);
+  
   /* TODO: need to handle conns */
   new->next = nat->mappings;
   nat->mappings = new;
@@ -166,5 +168,60 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   
   pthread_mutex_unlock(&(nat->lock));
   return mapping;
+}
+
+void sr_nat_add_connection(struct sr_nat *nat,
+  struct sr_nat_mapping *copy, uint32_t ip_dst, uint16_t aux_dst){
+  
+	  pthread_mutex_lock(&(nat->lock));
+  
+    struct sr_nat_mapping* cur = nat->mappings;
+	while(cur){
+	  if((cur->type == copy->type) && (cur->ip_int == copy->ip_int) && (cur->aux_int == copy->aux_int)){
+	  
+		  struct sr_nat_connection *new_con = malloc(sizeof(struct sr_nat_connection));
+		  
+		  new_con->ip_dst = ip_dst;
+		  new_con->aux_dst = aux_dst;
+		  new_con->established = 0;
+		  new_con->next = cur->conns;
+		  cur->conns = new_con;
+		  break;
+	}
+	cur = cur->next;
+  }
+  
+  pthread_mutex_unlock(&(nat->lock));
+  
+  /*TODO Error checking*/
+}
+
+int sr_nat_establish_connection(struct sr_nat *nat,
+  struct sr_nat_mapping *copy, uint32_t ip_dst, uint16_t aux_dst){
+  
+    pthread_mutex_lock(&(nat->lock));
+  
+  struct sr_nat_mapping* cur = nat->mappings;
+	while(cur){
+	  if((cur->type == copy->type) && (cur->ip_int == copy->ip_int) && (cur->aux_int == copy->aux_int)){
+	  
+			struct sr_nat_connection* con = cur->conns;
+			while (con){
+				if (new_con->ip_dst == ip_dst && new_con->aux_dst == aux_dst){
+					new_con->established = 1;
+					
+					pthread_mutex_unlock(&(nat->lock));
+					return 1;
+				}
+				con = con->next;
+			}
+			
+		  break;
+	}
+	cur = cur->next;
+  }
+  
+  pthread_mutex_unlock(&(nat->lock));
+  return 0;
 }
 
