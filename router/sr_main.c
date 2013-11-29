@@ -194,10 +194,12 @@ int main(int argc, char **argv)
 	
 	if (nat){
 		
+		(&sr)->nat = malloc(sizeof(struct sr_nat));
 	}
 	/* call router init (for arp subsystem etc.) */
+	
 	sr_init(&sr);
-
+	if ( sr_read_from_server(&sr) == 1){sr_enable_NAT(&sr,nat);};
 	/* -- whizbang main loop ;-) */
 	while( sr_read_from_server(&sr) == 1);
 	/*TODO if nan is enabled, need to call sr_nat_destroy here as well */

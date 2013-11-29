@@ -116,6 +116,9 @@ void print_hdr_icmp(uint8_t *buf) {
   fprintf(stderr, "\tcode: %d\n", icmp_hdr->icmp_code);
   /* Keep checksum in NBO */
   fprintf(stderr, "\tchecksum: %d\n", icmp_hdr->icmp_sum);
+  fprintf(stderr, "\tid: %d\n", icmp_hdr->icmp_id);
+  fprintf(stderr, "\tseq: %d\n", icmp_hdr->icmp_seq);
+  
 }
 
 

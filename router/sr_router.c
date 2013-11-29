@@ -13,6 +13,8 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
+#include <stdlib.h>
 
 
 #include "sr_if.h"
@@ -84,7 +86,7 @@ void sr_receiveNATpacket(struct sr_instance* sr,
  *
  *---------------------------------------------------------------------*/
 
-void sr_init(struct sr_instance* sr, int nat_enable)
+void sr_init(struct sr_instance* sr)
 {
 	/* REQUIRES */
 	assert(sr);
@@ -106,18 +108,19 @@ void sr_init(struct sr_instance* sr, int nat_enable)
 		return;
 	}
 	
-		
-	/* Enable NAT */
-	if (nat_enable){
-		sr_nat_init(&(sr->nat));
-		sr->nat_enable = 1;
-		
-		/* set internal external iface for nat */
-		sr->nat.int_iface =  sr_get_interface(sr,"eth1");
-		
-	}
-	
 } /* -- sr_init -- */
+
+void sr_enable_NAT(struct sr_instance* sr, int nat_enable)
+{
+	sr_nat_init(sr->nat);
+	sr->nat_enable = 1;
+	/* set internal external iface for nat */
+		
+	printf("interface is %p\n", sr_get_interface(sr,"eth1"));
+	sr->nat->int_iface =  sr_get_interface(sr,"eth1");
+	sr->nat->ext_iface =  sr_get_interface(sr,"eth2");
+	
+}
 
 /*---------------------------------------------------------------------
  * Method: sr_handlepacket(uint8_t* p,char* interface)
@@ -145,6 +148,9 @@ void sr_handlepacket(struct sr_instance* sr,
 	assert(packet);
 	assert(interface);
 	
+	printf("BEGINNINGGGGGGGGGGGGG\n");
+	print_hdrs(packet, len);
+	printf("**********************\n");
 	/* fill in code here */
 	int result;
 	
@@ -198,7 +204,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			if (sr_checkInterface(sr, iphdr->ip_dst)){
 				/* If it's an ICMP protocol */
 				
-				if (sr->nat_enable && iphdr->ip_dst == sr->nat.int_iface->ip){
+				if (sr->nat_enable && iphdr->ip_dst == sr->nat->ext_iface->ip){
 						/* Some one send packet to NAT client*/
 						sr_receiveNATpacket(sr, packet, len, interface);
 						return;
@@ -239,7 +245,7 @@ void sr_handlepacket(struct sr_instance* sr,
 					return;
 				}
 				
-				if (sr->nat_enable && interface == "eth1"){
+				if (sr->nat_enable && (strcmp(interface, "eth1") == 0)){
 					sr_sendNATpacket(sr, packet, len, interface);
 					return;
 				}
@@ -249,29 +255,28 @@ void sr_handlepacket(struct sr_instance* sr,
 			}
 			break;
 			/* I'm an ARP packet */
-			case ethertype_arp:
-				minlength += sizeof(sr_arp_hdr_t);
-				if (len < minlength) {
-					fprintf(stderr, "Failed to parse ARP header, insufficient length\n");
+		case ethertype_arp:
+			minlength += sizeof(sr_arp_hdr_t);
+			if (len < minlength) {
+				fprintf(stderr, "Failed to parse ARP header, insufficient length\n");
+				return;
+			}
+			sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+				
+			switch (ntohs(arp_hdr->ar_op)) {
+				case (arp_op_request):
+					sr_sendARPreply(sr, ehdr, arp_hdr,interface);
 					return;
-				}
-				sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-				
-				switch (ntohs(arp_hdr->ar_op)) {
-					case (arp_op_request):
-						sr_sendARPreply(sr, ehdr, arp_hdr,interface);
-						return;
-					case (arp_op_reply):
-						sr_handleARPReply(sr, ehdr, arp_hdr, interface);
-						return;
-					default:
-						fprintf(stderr, "Unknown ARP op type");
-						return;
-				}
-				
-					default:
-						fprintf(stderr, "Unrecognized Ethernet Type: %d\n", ethtype);
-						return;
+				case (arp_op_reply):
+					sr_handleARPReply(sr, ehdr, arp_hdr, interface);
+					return;
+				default:
+					fprintf(stderr, "Unknown ARP op type");
+					return;
+			}
+		default:
+			fprintf(stderr, "Unrecognized Ethernet Type: %d\n", ethtype);
+			return;
 	}
 	
 	return;
@@ -286,8 +291,7 @@ void sr_sendARPreply(struct sr_instance* sr,
 		     sr_arp_hdr_t *arphdr,
 		     char* interface)
 {
-	uint8_t *new_packet = (uint8_t *)malloc(sizeof (sr_ethernet_hdr_t) +
-	sizeof (sr_arp_hdr_t));
+	uint8_t *new_packet = (uint8_t *)malloc(sizeof (sr_ethernet_hdr_t) + sizeof (sr_arp_hdr_t));
 	
 	sr_ethernet_hdr_t *new_ethhdr = (sr_ethernet_hdr_t *) new_packet;
 	sr_arp_hdr_t *new_arphdr = (sr_arp_hdr_t *)(new_packet +
@@ -417,13 +421,16 @@ void sr_handleIPforwarding(struct sr_instance* sr,
 	iphdr->ip_sum = 0;
 	iphdr->ip_sum = cksum(iphdr, sizeof(sr_ip_hdr_t));
 	
+	printf("Handle\n\n");
+	print_hdrs(packet,len);
+	
 	struct sr_rt *match_rt_entry = sr_findMatchInRoutingTable(sr->routing_table, iphdr->ip_dst);
 	
 	if (match_rt_entry == NULL) {
 		sr_sendICMPMsg(sr,3,0, interface, packet,len);
 		return;
 	}
-	
+	printf("***packet sended***1\n");
 	struct sr_if *next_interface = sr_get_interface(sr, match_rt_entry->interface);
 	/* Check the ARP cache for the next-hop MAC address corresponding
 	 * to the next-hop IP. - next-hop MAC address*/
@@ -438,7 +445,8 @@ void sr_handleIPforwarding(struct sr_instance* sr,
 			ehdr->ether_dhost[i] = next_arp_entry->mac[i];
 		}
 		/* send the packet */
-		int result = sr_send_packet(sr, packet, len, match_rt_entry->interface);
+		printf("***packet sended***2\n");
+		sr_send_packet(sr, packet, len, match_rt_entry->interface);
 		/* Sending packet fails, free the pointer */
 		free((void *) next_arp_entry);
 	}else{
@@ -450,6 +458,7 @@ void sr_handleIPforwarding(struct sr_instance* sr,
 					   next_interface->name);
 		sr_handle_arpreq(sr,req);
 	}
+	printf("***packet sended***3\n");
 	return;
 }
 
@@ -496,7 +505,7 @@ int sr_checkICMPchecksum(sr_icmp_hdr_t *icmp_hdr, int len){
  */
 void sr_handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req) {
 	
-	if (req->sent == NULL){req->sent = 0;}
+	if (!req->sent){req->sent = 0;}
 	
 	time_t *now_time = malloc(sizeof(time_t));
 	time(now_time);
@@ -515,7 +524,7 @@ void sr_handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req) {
 				if (iphdr->ip_p == ip_protocol_icmp) {
 					sr_icmp_hdr_t *icmphdr = (sr_icmp_hdr_t *) (iphdr + sizeof(sr_icmp_hdr_t));
 					/* Do not generate ICMP error messages for ICMP error Messages */
-					uint8_t type,code;
+					uint8_t type;
 					type = icmphdr->icmp_type;
 					
 					
@@ -533,7 +542,7 @@ void sr_handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req) {
 				sizeof (sr_ip_hdr_t) +
 				sizeof(sr_icmp_t3_hdr_t));
 				
-				sr_ip_hdr_t *new_ethdr = (sr_ethernet_hdr_t*) (new_packet);
+				sr_ethernet_hdr_t *new_ethdr = (sr_ethernet_hdr_t*) (new_packet);
 				setEthernetHeader(new_ethdr, ehdr->ether_shost,sr_get_interface(sr, entry->interface),ethertype_ip);
 				
 				sr_ip_hdr_t *new_iphdr = (sr_ip_hdr_t*) (new_packet + sizeof(sr_ethernet_hdr_t));
@@ -588,7 +597,7 @@ void sr_handleARPReply(struct sr_instance* sr,
 		struct sr_packet *pkts = req->packets;
 		int i;
 		while (pkts != NULL) {
-			sr_ethernet_hdr_t *ehdr = pkts->buf;
+			sr_ethernet_hdr_t *ehdr = (sr_ethernet_hdr_t *) (pkts->buf);
 			
 			struct sr_if* pkt_interface =  sr_get_interface(sr,pkts->iface);
 			
@@ -782,25 +791,40 @@ sr_sendNATpacket(struct sr_instance* sr,
 			   char* interface/* lent */)
 {
 	/* NAT before forwarding */
+	printf("Send NAT\n");
 	
 	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
 	
-	if (sr->nat_enable && interface == "eth1"){
+	if (sr->nat_enable && (strcmp(interface,"eth1") == 0)){
 		/* from internal interface */
-		struct sr_nat_mapping tmp;
+		
+		struct sr_nat_mapping *tmp;
 		sr_nat_mapping_type packet_type;
+		
+		printf("I got here\n");
+		
+		print_hdrs(packet,len);
+		
 		switch (iphdr->ip_p){
 			case ip_protocol_icmp:
 				/* ICMP */
 				packet_type = nat_mapping_icmp;
-				sr_icmp_hdr_t *icmphdr = (sr_icmp_hdr_t *) (iphdr + sizeof(sr_ip_hdr_t));
+				sr_icmp_hdr_t *icmphdr = (sr_icmp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 				tmp = sr_nat_lookup_internal(sr->nat,iphdr->ip_src,icmphdr->icmp_id,packet_type);
 				if (tmp == NULL){
 					tmp = sr_nat_insert_mapping(sr->nat,iphdr->ip_src,icmphdr->icmp_id,packet_type);
 
 				}
-				iphdr->ip_src = sr->nat.ext_iface->ip;
+				iphdr->ip_src = sr->nat->ext_iface->ip;
 				icmphdr->icmp_id = tmp->aux_ext;
+				icmphdr->icmp_sum = 0;
+				icmphdr->icmp_sum = cksum(icmphdr, len-sizeof(sr_ethernet_hdr_t)-sizeof(sr_ip_hdr_t));
+				/* re-compute checksum */
+				/*
+				 * 
+				 * icmphdr->icmp_id = tmp->aux_ext;
+				 * icmphdr->icmp_sum = 0;
+				icmphdr->icmp_sum = cksum(icmphdr, sizeof(sr_icmp_hdr_t));*/
 				free(tmp);
 				break;
 			case ip_protocol_tcp:
@@ -819,9 +843,7 @@ sr_sendNATpacket(struct sr_instance* sr,
 				
 				
 				
-				if (tcphdr->flags )
-				
-				iphdr->ip_src = sr->nat.ext_iface->ip;
+				iphdr->ip_src = sr->nat->ext_iface->ip;
 				tcphdr->th_sport = tmp->aux_ext;
 				
 				/* TODO: Update TCP checksum*/
@@ -833,6 +855,10 @@ sr_sendNATpacket(struct sr_instance* sr,
 		}
 	}
 	
+	print_hdrs(packet,len);
+	
+	sr_handleIPforwarding(sr, packet, len, interface);
+	
 	return;
 }
 
@@ -843,25 +869,29 @@ sr_receiveNATpacket(struct sr_instance* sr,
 			   char* interface/* lent */)
 {
 	/* NAT before forwarding */
-	
+	printf("******\n\nReceiving NAT packet\n\n******");
+	print_hdrs(packet, len);
 	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
 	
-	if (sr->nat_enable && interface != "eth1"){
+	if (sr->nat_enable &&  (strcmp(interface,"eth1") != 0)){
 		/* from external interface */
-		struct sr_nat_mapping tmp;
+		struct sr_nat_mapping *tmp;
 		sr_nat_mapping_type packet_type;
 		switch (iphdr->ip_p){
 			case ip_protocol_icmp:
 				/* ICMP */
 				packet_type = nat_mapping_icmp;
-				sr_icmp_hdr_t *icmphdr = (sr_icmp_hdr_t *) (iphdr + sizeof(sr_ip_hdr_t));
-				tmp = sr_nat_lookup_internal(sr->nat,iphdr->ip_src,icmphdr->icmp_id,packet_type);
+				sr_icmp_hdr_t *icmphdr = (sr_icmp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+				tmp = sr_nat_lookup_external(sr->nat,icmphdr->icmp_id,packet_type);
 				if (tmp == NULL){
 					/*TODO handle this case*/
 				}
-				iphdr->ip_src = sr->nat.int_iface->ip;
+				iphdr->ip_src = sr->nat->int_iface->ip;
+				iphdr->ip_dst = tmp->ip_int;
 				
 				icmphdr->icmp_id = tmp->aux_int;
+				icmphdr->icmp_sum = 0;
+				icmphdr->icmp_sum = cksum(icmphdr, len-sizeof(sr_ethernet_hdr_t)-sizeof(sr_ip_hdr_t));
 				free(tmp);
 				break;
 			case ip_protocol_tcp:
@@ -870,6 +900,8 @@ sr_receiveNATpacket(struct sr_instance* sr,
 				break;
 		}
 	}
+	print_hdrs(packet, len);
+	sr_handleIPforwarding(sr, packet, len, interface);
 	return;
 }
 

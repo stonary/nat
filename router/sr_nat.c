@@ -3,6 +3,8 @@
 #include <assert.h>
 #include "sr_nat.h"
 #include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 
 
 
@@ -26,8 +28,8 @@ int sr_nat_init(struct sr_nat *nat) { /* Initializes the nat */
   /* CAREFUL MODIFYING CODE ABOVE THIS LINE! */
 
   nat->mappings = NULL;
-  /* Initialize any variables here */
-  
+  nat->global_auxext = 1024;
+  nat->icmp_timeout = 6000;
   
 
   return success;
@@ -66,7 +68,8 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
     /* handle periodic tasks here */
       struct sr_nat_mapping* cur = nat->mappings;
       struct sr_nat_mapping* cur_next;
-	nat->mapping = NULL;
+	nat->mappings = NULL;
+	
 	
 	while(cur){
 		cur_next = cur->next;
@@ -76,16 +79,21 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
 				timeout = nat->icmp_timeout;
 				break;
 			/* TODO: switch between establish and transitory*/
+			case nat_mapping_tcp:
+				break;
 		}
+		double diff_time = difftime(curtime, cur->last_updated);
 		
-		if(curtime - cur->last_updated <= timeout){
-			cur->next = nat->mapping;
-			nat->mapping = cur;
+		if(diff_time < timeout){
+			cur->next = nat->mappings;
+			nat->mappings = cur;
 		} else {
 			free(cur);
 		}
 		cur = cur_next;
 	}
+
+	
 	
     pthread_mutex_unlock(&(nat->lock));
   }
@@ -157,6 +165,8 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
 
   new->aux_int = aux_int;
   new->aux_ext = nat->global_auxext++;
+
+  
   new->last_updated = time(NULL);
   
   /* TODO: need to handle conns */
@@ -207,8 +217,8 @@ int sr_nat_establish_connection(struct sr_nat *nat,
 	  
 			struct sr_nat_connection* con = cur->conns;
 			while (con){
-				if (new_con->ip_dst == ip_dst && new_con->aux_dst == aux_dst){
-					new_con->established = 1;
+				if (con->ip_dst == ip_dst && con->aux_dst == aux_dst){
+					con->established = 1;
 					
 					pthread_mutex_unlock(&(nat->lock));
 					return 1;
