@@ -195,6 +195,9 @@ int main(int argc, char **argv)
 	if (nat){
 		
 		(&sr)->nat = malloc(sizeof(struct sr_nat));
+		(&sr)->nat->icmp_timeout = icmp_mto;
+		(&sr)->nat->tcp_establish_timeout = tcp_syn_mto;
+		(&sr)->nat->tcp_transitory_timeout = tcp_idle_mto;
 	}
 	/* call router init (for arp subsystem etc.) */
 	

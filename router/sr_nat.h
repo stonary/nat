@@ -16,9 +16,19 @@ typedef enum {
 struct sr_nat_connection {
   /* add TCP connection state data members here */
 	uint32_t ip_dst;
-	uint16_t aux_dst;
+	uint16_t port_dst;
+	
+	uint32_t ip_src;
+	uint16_t port_src;
+	
+	/* isn from dst */
+	uint16_t isn_dst;
+	/* isn from src */
+	uint16_t isn_src;
 	
 	int established;
+	
+	time_t last_updated;
 	
   struct sr_nat_connection *next;
 };
@@ -72,12 +82,13 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
    You must free the returned structure if it is not NULL. */
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type );
+
+struct sr_nat_connection *sr_nat_lookup_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint32_t ip_src, uint16_t port_src, uint32_t ip_dst, uint16_t port_dst);
   
-void sr_nat_add_connection(struct sr_nat *nat,
-  struct sr_nat_mapping *copy, uint32_t ip_dst, uint16_t aux_dst);
+void sr_nat_add_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint32_t ip_src, uint16_t port_src, uint32_t ip_dst, uint16_t port_dst, uint16_t isn_src);
   
 int sr_nat_establish_connection(struct sr_nat *nat,
-  struct sr_nat_mapping *copy, uint32_t ip_dst, uint16_t aux_dst);
+  struct sr_nat_mapping *copy, struct sr_nat_connection *con_copy);
 
-
+int sr_update_isn(struct sr_nat *nat, struct sr_nat_mapping *copy, struct sr_nat_connection *con_copy, uint16_t isn_src, uint16_t isn_dst);
 #endif

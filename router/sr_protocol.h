@@ -217,6 +217,15 @@ struct sr_tcp_hdr {
 };
 typedef struct sr_tcp_hdr sr_tcp_hdr_t;
 
+struct sr_tcp_pseudo {
+   uint32_t ip_src; /* source ip */
+   uint32_t ip_dst; /* destination ip */
+   uint8_t zeroes; /* = 0 */
+   uint8_t protocol; /* = 6 */
+   uint16_t len; /* length of TCPHeader */
+} __attribute__ ((packed));
+typedef struct sr_tcp_pseudo sr_tcp_pseudo_t;
+
 #define sr_IFACE_NAMELEN 32
 
 #endif /* -- SR_PROTOCOL_H -- */

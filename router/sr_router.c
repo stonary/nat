@@ -116,7 +116,6 @@ void sr_enable_NAT(struct sr_instance* sr, int nat_enable)
 	sr->nat_enable = 1;
 	/* set internal external iface for nat */
 		
-	printf("interface is %p\n", sr_get_interface(sr,"eth1"));
 	sr->nat->int_iface =  sr_get_interface(sr,"eth1");
 	sr->nat->ext_iface =  sr_get_interface(sr,"eth2");
 	
@@ -148,9 +147,9 @@ void sr_handlepacket(struct sr_instance* sr,
 	assert(packet);
 	assert(interface);
 	
-	printf("BEGINNINGGGGGGGGGGGGG\n");
+	printf("\n*********Raw*************\n");
 	print_hdrs(packet, len);
-	printf("**********************\n");
+	printf("**********************\n\n");
 	/* fill in code here */
 	int result;
 	
@@ -421,16 +420,12 @@ void sr_handleIPforwarding(struct sr_instance* sr,
 	iphdr->ip_sum = 0;
 	iphdr->ip_sum = cksum(iphdr, sizeof(sr_ip_hdr_t));
 	
-	printf("Handle\n\n");
-	print_hdrs(packet,len);
-	
 	struct sr_rt *match_rt_entry = sr_findMatchInRoutingTable(sr->routing_table, iphdr->ip_dst);
 	
 	if (match_rt_entry == NULL) {
 		sr_sendICMPMsg(sr,3,0, interface, packet,len);
 		return;
 	}
-	printf("***packet sended***1\n");
 	struct sr_if *next_interface = sr_get_interface(sr, match_rt_entry->interface);
 	/* Check the ARP cache for the next-hop MAC address corresponding
 	 * to the next-hop IP. - next-hop MAC address*/
@@ -445,7 +440,6 @@ void sr_handleIPforwarding(struct sr_instance* sr,
 			ehdr->ether_dhost[i] = next_arp_entry->mac[i];
 		}
 		/* send the packet */
-		printf("***packet sended***2\n");
 		sr_send_packet(sr, packet, len, match_rt_entry->interface);
 		/* Sending packet fails, free the pointer */
 		free((void *) next_arp_entry);
@@ -458,7 +452,6 @@ void sr_handleIPforwarding(struct sr_instance* sr,
 					   next_interface->name);
 		sr_handle_arpreq(sr,req);
 	}
-	printf("***packet sended***3\n");
 	return;
 }
 
@@ -801,8 +794,6 @@ sr_sendNATpacket(struct sr_instance* sr,
 		struct sr_nat_mapping *tmp;
 		sr_nat_mapping_type packet_type;
 		
-		printf("I got here\n");
-		
 		print_hdrs(packet,len);
 		
 		switch (iphdr->ip_p){
@@ -817,21 +808,17 @@ sr_sendNATpacket(struct sr_instance* sr,
 				}
 				iphdr->ip_src = sr->nat->ext_iface->ip;
 				icmphdr->icmp_id = tmp->aux_ext;
+				
 				icmphdr->icmp_sum = 0;
 				icmphdr->icmp_sum = cksum(icmphdr, len-sizeof(sr_ethernet_hdr_t)-sizeof(sr_ip_hdr_t));
-				/* re-compute checksum */
-				/*
-				 * 
-				 * icmphdr->icmp_id = tmp->aux_ext;
-				 * icmphdr->icmp_sum = 0;
-				icmphdr->icmp_sum = cksum(icmphdr, sizeof(sr_icmp_hdr_t));*/
+				
 				free(tmp);
 				break;
 			case ip_protocol_tcp:
 				/* TCP */
 				packet_type = nat_mapping_tcp;
 				
-				sr_tcp_hdr_t *tcphdr = (sr_tcp_hdr_t *) (iphdr + sizeof(sr_ip_hdr_t));
+				sr_tcp_hdr_t *tcphdr = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 				tmp = sr_nat_lookup_internal(sr->nat,iphdr->ip_src,tcphdr->th_sport,packet_type);
 				
 				if (tmp == NULL){
@@ -839,18 +826,46 @@ sr_sendNATpacket(struct sr_instance* sr,
 				}
 				
 				/* look up connection*/
+				/* free con later */
+				struct sr_nat_connection *con = sr_nat_lookup_connection(sr->nat, tmp, iphdr->ip_src, tcphdr->th_sport, iphdr->ip_dst, tcphdr->th_dport);
 				
-				
+				if (con){
+					/* check con state */
+					if (con->established){
+						/* forward */
+						
+					}else{
+						/* check if is SYN ACK */
+						if ((tcphdr->th_flags & TH_SYN == 1) && (tcphdr->th_flags & TH_ACK == 1)){
+							if (con->isn_src + 1 == tcphdr->th_ack){
+								sr_update_isn(sr->nat, tmp, con, con->isn_src, tcphdr->th_seq);
+							}
+						} else if ((tcphdr->th_flags & TH_SYN == 0) && (tcphdr->th_flags & TH_ACK == 1)){
+							if(con->isn_dst + 1 == tcphdr->th_ack){
+								/* change to establish state*/
+								sr_nat_establish_connection(sr->nat, tmp, con);
+							}
+						}
+						/* otherwies forward */
+						
+						
+					}
+				} else {
+					/* check if SYN */
+					if ((tcphdr->th_flags & TH_SYN == 1) && (tcphdr->th_flags & TH_ACK == 0)){
+						sr_nat_add_connection(sr->nat, tmp, iphdr->ip_src, tcphdr->th_sport, iphdr->ip_dst, tcphdr->th_dport, tcphdr->th_seq);
+					} else {
+						/* DO STH */
+					}
+				}
 				
 				
 				iphdr->ip_src = sr->nat->ext_iface->ip;
-				tcphdr->th_sport = tmp->aux_ext;
+				tcphdr->th_sport = htons(tmp->aux_ext);
 				
-				/* TODO: Update TCP checksum*/
-				
-				
-				
-				
+				tcphdr->th_sum = 0;
+				tcphdr->th_sum = sr_get_tcp_cksum(packet, len);
+	
 				break;
 		}
 	}
@@ -897,11 +912,90 @@ sr_receiveNATpacket(struct sr_instance* sr,
 			case ip_protocol_tcp:
 				/* TCP */
 				packet_type = nat_mapping_tcp;
+				
+				sr_tcp_hdr_t *tcphdr = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+				
+				tmp = sr_nat_lookup_external(sr->nat,ntohs(tcphdr->th_dport),packet_type);
+				
+				if (tmp == NULL){
+					/* TODO: ICMP */
+					printf("\n###############################\n");
+					return;
+				}
+				
+				/* look up connection*/
+				/* free con later */
+				struct sr_nat_connection *con = sr_nat_lookup_connection(sr->nat, tmp, tmp->ip_int, tmp->aux_int, iphdr->ip_src, tcphdr->th_sport);
+				
+				if (con){
+					/* check con state */
+					if (con->established){
+						/* forward */
+						
+					}else{
+						/* check if is SYN ACK */
+						if ((tcphdr->th_flags & TH_SYN == 1) && (tcphdr->th_flags & TH_ACK == 1)){
+							if (con->isn_src + 1 == tcphdr->th_ack){
+								sr_update_isn(sr->nat, tmp, con, con->isn_src, tcphdr->th_seq);
+							}
+						} else if ((tcphdr->th_flags & TH_SYN == 0) && (tcphdr->th_flags & TH_ACK == 1)){
+							if(con->isn_dst + 1 == tcphdr->th_ack){
+								/* change to establish state*/
+								sr_nat_establish_connection(sr->nat, tmp, con);
+							}
+						}
+						/* otherwies forward */
+						
+						
+					}
+				} else {
+					/* check if SYN */
+					if ((tcphdr->th_flags & TH_SYN == 1) && (tcphdr->th_flags & TH_ACK == 0)){
+						sr_nat_add_connection(sr->nat, tmp, iphdr->ip_src, tcphdr->th_sport, iphdr->ip_dst, tcphdr->th_dport, tcphdr->th_seq);
+					} else {
+						/* DO STH */
+					}
+				}
+				
+				iphdr->ip_dst = tmp->ip_int;
+				tcphdr->th_dport = tmp->aux_int;
+				
+				
+				
+				tcphdr->th_sum = 0;
+				tcphdr->th_sum = sr_get_tcp_cksum(packet, len);
+	
 				break;
+				
 		}
 	}
 	print_hdrs(packet, len);
 	sr_handleIPforwarding(sr, packet, len, interface);
 	return;
 }
+
+uint16_t sr_get_tcp_cksum(uint8_t *packet, unsigned int len){
+	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+	sr_tcp_hdr_t *tcphdr = (sr_tcp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+	unsigned ip_plen = len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t);
+	
+	
+	uint8_t *new_hdr = malloc(sizeof(sr_tcp_pseudo_t) + ip_plen);
+	sr_tcp_pseudo_t *p_tcphdr = (sr_tcp_pseudo_t *)(new_hdr);
+	p_tcphdr->ip_src = iphdr->ip_src;
+	p_tcphdr->ip_dst = iphdr->ip_dst;
+	p_tcphdr->zeroes = 0;
+	p_tcphdr->protocol = 6;
+	p_tcphdr->len = htons(ip_plen);
+	
+	memcpy(new_hdr + sizeof(sr_tcp_pseudo_t), packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), ip_plen);
+	
+	uint16_t res = cksum (new_hdr, sizeof(sr_tcp_pseudo_t) + ip_plen);
+	
+	
+	free(new_hdr);
+	return res;
+}
+
+
 

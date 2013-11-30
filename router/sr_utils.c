@@ -143,6 +143,21 @@ void print_hdr_arp(uint8_t *buf) {
   print_addr_ip_int(ntohl(arp_hdr->ar_tip));
 }
 
+/* Prints out fields in ARP header */
+void print_hdr_tcp(uint8_t *buf) {
+	sr_tcp_hdr_t *tcphdr = (sr_tcp_hdr_t *)(buf);
+	fprintf(stderr, "TCP header:\n");
+	fprintf(stderr, "\tth_sport: %d\n", ntohs(tcphdr->th_sport));
+	fprintf(stderr, "\tth_dport: %d\n", ntohs(tcphdr->th_dport));
+	fprintf(stderr, "\tth_seq: %d\n", ntohs(tcphdr->th_seq));
+	fprintf(stderr, "\tth_ack: %d\n", ntohs(tcphdr->th_ack));
+	fprintf(stderr, "\tth_flags: %d\n", tcphdr->th_flags);
+	fprintf(stderr, "\tth_off: %d\n", tcphdr->th_off);
+	fprintf(stderr, "\tth_win: %d\n", tcphdr->th_win);
+	fprintf(stderr, "\tth_sum: %d\n", tcphdr->th_sum);
+	fprintf(stderr, "\tth_urp: %d\n", tcphdr->th_urp);
+}
+
 /* Prints out all possible headers, starting from Ethernet */
 void print_hdrs(uint8_t *buf, uint32_t length) {
 
@@ -172,6 +187,9 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
         fprintf(stderr, "Failed to print ICMP header, insufficient length\n");
       else
         print_hdr_icmp(buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+    }else{
+	     minlength += sizeof(sr_tcp_hdr_t);
+	     print_hdr_tcp(buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
     }
   }
   else if (ethtype == ethertype_arp) { /* ARP */
@@ -186,3 +204,31 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
   }
 }
 
+uint16_t tcp_cksum (const void * addr, unsigned len, uint16_t init) {
+	uint32_t sum;
+	const uint16_t * word;
+
+	sum = init;
+	word = addr;
+
+  /*
+   * Our algorithm is simple, using a 32 bit accumulator (sum), we add
+   * sequential 16 bit words to it, and at the end, fold back all the
+   * carry bits from the top 16 bits into the lower 16 bits.
+   */
+
+	while (len >= 2) {
+		sum += *(word++);
+		len -= 2;
+	}
+
+	if (len > 0) {
+		uint16_t tmp;
+
+		*(uint8_t *)(&tmp) = *(uint8_t *)word;
+	}
+
+	sum = (sum >> 16) + (sum & 0xffff);
+	sum += (sum >> 16);
+	return ((uint16_t)~sum);
+}
