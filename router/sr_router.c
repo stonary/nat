@@ -53,12 +53,6 @@ void sr_sendICMPPingRep(struct sr_instance *sr,
 			uint8_t *packet,
 			unsigned int len,
 			char * interface);
-void sr_sendICMPMsg(struct sr_instance * sr,
-		    uint8_t icmp_type,
-		    uint8_t icmp_code,
-		    char * interface, 
-		    uint8_t * old_packet,
-		    unsigned int len);
 void sr_sendARPreply(struct sr_instance* sr,
 		     sr_ethernet_hdr_t *ethhdr/* lent */,
 		     sr_arp_hdr_t *arphdr,
@@ -112,7 +106,7 @@ void sr_init(struct sr_instance* sr)
 
 void sr_enable_NAT(struct sr_instance* sr, int nat_enable)
 {
-	sr_nat_init(sr->nat);
+	sr_nat_init(sr);
 	sr->nat_enable = 1;
 	/* set internal external iface for nat */
 		
@@ -831,10 +825,10 @@ sr_sendNATpacket(struct sr_instance* sr,
 				
 				if (con){
 					/* check con state */
-					if (con->established){
+					if (con->established == 1){
 						/* forward */
 						
-					}else{
+					} else if (con->established == 0) {
 						/* check if is SYN ACK */
 						if ((tcphdr->th_flags & TH_SYN == 1) && (tcphdr->th_flags & TH_ACK == 1)){
 							if (con->isn_src + 1 == tcphdr->th_ack){
@@ -846,14 +840,17 @@ sr_sendNATpacket(struct sr_instance* sr,
 								sr_nat_establish_connection(sr->nat, tmp, con);
 							}
 						}
-						/* otherwies forward */
-						
-						
+						/* otherwies forward */	
+					} else {
+						/* connection is -1 */
+						if ((tcphdr->th_flags & TH_SYN == 1) && (tcphdr->th_flags & TH_ACK == 0)){
+							sr_nat_establish_connection(sr->nat, tmp, con);
+						}
 					}
 				} else {
 					/* check if SYN */
 					if ((tcphdr->th_flags & TH_SYN == 1) && (tcphdr->th_flags & TH_ACK == 0)){
-						sr_nat_add_connection(sr->nat, tmp, iphdr->ip_src, tcphdr->th_sport, iphdr->ip_dst, tcphdr->th_dport, tcphdr->th_seq);
+						sr_nat_add_connection(sr->nat, tmp, iphdr->ip_src, tcphdr->th_sport, iphdr->ip_dst, tcphdr->th_dport, tcphdr->th_seq, 0, NULL, 0);
 					} else {
 						/* DO STH */
 					}
@@ -951,7 +948,8 @@ sr_receiveNATpacket(struct sr_instance* sr,
 				} else {
 					/* check if SYN */
 					if ((tcphdr->th_flags & TH_SYN == 1) && (tcphdr->th_flags & TH_ACK == 0)){
-						sr_nat_add_connection(sr->nat, tmp, iphdr->ip_src, tcphdr->th_sport, iphdr->ip_dst, tcphdr->th_dport, tcphdr->th_seq);
+						/* Make the established to be -1: timeout after 6s if no new client outbound exits */
+						sr_nat_add_connection(sr->nat, tmp, iphdr->ip_src, tcphdr->th_sport, iphdr->ip_dst, tcphdr->th_dport, tcphdr->th_seq, -1, packet, len);
 					} else {
 						/* DO STH */
 					}
@@ -976,7 +974,6 @@ sr_receiveNATpacket(struct sr_instance* sr,
 
 uint16_t sr_get_tcp_cksum(uint8_t *packet, unsigned int len){
 	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-	sr_tcp_hdr_t *tcphdr = (sr_tcp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 	unsigned ip_plen = len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t);
 	
 	
@@ -989,10 +986,7 @@ uint16_t sr_get_tcp_cksum(uint8_t *packet, unsigned int len){
 	p_tcphdr->len = htons(ip_plen);
 	
 	memcpy(new_hdr + sizeof(sr_tcp_pseudo_t), packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), ip_plen);
-	
 	uint16_t res = cksum (new_hdr, sizeof(sr_tcp_pseudo_t) + ip_plen);
-	
-	
 	free(new_hdr);
 	return res;
 }

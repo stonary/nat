@@ -49,6 +49,7 @@ extern char* optarg;
 #define DEFAULT_ICMP_MAPPING_TIMEOUT 60
 #define DEFAULT_TCP_SYN_TIMEOUT 7440
 #define DEFAULT_TCP_TRANS_IDLE_TIMEOUT 300
+#define DEFAULT_TCP_UNSOLICITED_INBOUND_SYN 6
 /* TODO simply mark this for now, there's probably a better way */
 #define DEFAULT_NAT 0
 
@@ -81,6 +82,7 @@ int main(int argc, char **argv)
 	unsigned int icmp_mto = DEFAULT_ICMP_MAPPING_TIMEOUT;
 	unsigned int tcp_syn_mto = DEFAULT_TCP_SYN_TIMEOUT;
 	unsigned int tcp_idle_mto = DEFAULT_TCP_TRANS_IDLE_TIMEOUT;
+	unsigned int tcp_unsolicited_syn_mto = DEFAULT_TCP_UNSOLICITED_INBOUND_SYN;
 	int nat = DEFAULT_NAT;
 
 	struct sr_instance sr;
@@ -198,6 +200,7 @@ int main(int argc, char **argv)
 		(&sr)->nat->icmp_timeout = icmp_mto;
 		(&sr)->nat->tcp_establish_timeout = tcp_syn_mto;
 		(&sr)->nat->tcp_transitory_timeout = tcp_idle_mto;
+		(&sr)->nat->tcp_unsolicited_syn_timeout = tcp_unsolicited_syn_mto;
 	}
 	/* call router init (for arp subsystem etc.) */
 	

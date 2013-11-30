@@ -5,11 +5,13 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include "sr_router.h"
 
 
 
-int sr_nat_init(struct sr_nat *nat) { /* Initializes the nat */
-
+int sr_nat_init(struct sr_instance *sr) { /* Initializes the nat */
+	
+	struct sr_nat* nat = sr->nat;
   assert(nat);
   
   nat->mappings = NULL;
@@ -26,7 +28,7 @@ int sr_nat_init(struct sr_nat *nat) { /* Initializes the nat */
   pthread_attr_setdetachstate(&(nat->thread_attr), PTHREAD_CREATE_JOINABLE);
   pthread_attr_setscope(&(nat->thread_attr), PTHREAD_SCOPE_SYSTEM);
   pthread_attr_setscope(&(nat->thread_attr), PTHREAD_SCOPE_SYSTEM);
-  pthread_create(&(nat->thread), &(nat->thread_attr), sr_nat_timeout, nat);
+  pthread_create(&(nat->thread), &(nat->thread_attr), sr_nat_timeout, sr);
 
   /* CAREFUL MODIFYING CODE ABOVE THIS LINE! */
   return success;
@@ -53,8 +55,9 @@ int sr_nat_destroy(struct sr_nat *nat) {  /* Destroys the nat (free memory) */
 
 }
 
-void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
-  struct sr_nat *nat = (struct sr_nat *)nat_ptr;
+void *sr_nat_timeout(void *sr_ptr) {  /* Periodic Timout handling */
+	struct sr_instance *sr = (struct sr_instance *)sr_ptr;
+  struct sr_nat *nat = sr->nat;
   uint16_t timeout;
   while (1) {
     sleep(1.0);
@@ -65,6 +68,8 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
     /* handle periodic tasks here */
       struct sr_nat_mapping* cur = nat->mappings;
       struct sr_nat_mapping* cur_next;
+      struct sr_nat_connection *con;
+       struct sr_nat_connection *con_next;
 	nat->mappings = NULL;
 	
 	
@@ -77,15 +82,47 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
 				break;
 			/* TODO: switch between establish and transitory*/
 			case nat_mapping_tcp:
-				timeout = 1000;
+				timeout = 5;				
 				break;
 		}
-		double diff_time = difftime(curtime, cur->last_updated);
 		
-		if(diff_time < timeout){
+		
+		if (cur->type == nat_mapping_tcp){
+			con = cur->conns;
+			cur->conns = NULL;
+			uint16_t con_timeout;
+			
+			while(con){
+				con_next = con->next;
+				
+				if (con->established == 1){
+					con_timeout = nat->tcp_establish_timeout;
+				}else if (con->established == 0){
+					con_timeout = nat->tcp_transitory_timeout;
+				}else {
+					con_timeout = nat->tcp_unsolicited_syn_timeout;
+				}
+				
+				double t = difftime(curtime, con->last_updated);
+				if(t < con_timeout){
+					con->next = cur->conns;
+					cur->conns = con;
+				} else {
+					if (con->established == -1) {
+						/* Call function to send ICMP */	
+						sr_sendICMPMsg(sr, 3, 3, nat->ext_iface->name, con->pending_packet, con->len);
+					}
+					free(con);
+				}
+				con = con_next;
+			}
+		}
+		
+		double diff_time = difftime(curtime, cur->last_updated);
+		if(diff_time < timeout && cur->conns == NULL){
 			cur->next = nat->mappings;
 			nat->mappings = cur;
-		} else {
+		} else{
 			free(cur);
 		}
 		cur = cur_next;
@@ -178,7 +215,8 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   return mapping;
 }
 
-void sr_nat_add_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint32_t ip_src, uint16_t port_src, uint32_t ip_dst, uint16_t port_dst, uint16_t isn_src)
+void sr_nat_add_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint32_t ip_src, uint16_t port_src, uint32_t ip_dst, uint16_t port_dst, uint16_t isn_src, int established, 
+uint8_t *pending_packet, unsigned int len)
 { 
 	pthread_mutex_lock(&(nat->lock));
 	struct sr_nat_mapping* cur = nat->mappings;
@@ -191,7 +229,9 @@ void sr_nat_add_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint
 			new_con->port_dst = port_dst;
 			new_con->isn_src = isn_src;
 			new_con->isn_dst = -1;
-			new_con->established = 0;
+			new_con->established = established;
+			new_con->pending_packet = pending_packet;
+			new_con->len = len;
 			new_con->last_updated = time(NULL);
 			new_con->next = cur->conns;
 			cur->conns = new_con;
@@ -216,6 +256,10 @@ int sr_nat_establish_connection(struct sr_nat *nat,
 			while (con){
 				if (con->ip_src == con_copy->ip_src && con->port_src == con_copy->port_src && con->ip_dst == con_copy->ip_dst && con->port_dst == con_copy->port_dst){
 					con->established = 1;
+					if (con->pending_packet != NULL) {
+						free(con->pending_packet);
+						con->len = 0;
+					}
 					pthread_mutex_unlock(&(nat->lock));
 					return 1;
 				}
@@ -229,7 +273,7 @@ int sr_nat_establish_connection(struct sr_nat *nat,
 	return 0;
 }
 
-
+/* src is local / internal to nat, dst is external/ servers */
 struct sr_nat_connection *sr_nat_lookup_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint32_t ip_src, uint16_t port_src, uint32_t ip_dst, uint16_t port_dst)
 { 
 	pthread_mutex_lock(&(nat->lock));

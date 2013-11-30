@@ -6,6 +6,7 @@
 #include <time.h>
 #include <pthread.h>
 #include "sr_if.h"
+#include "sr_router.h"
 
 typedef enum {
   nat_mapping_icmp,
@@ -25,8 +26,13 @@ struct sr_nat_connection {
 	uint16_t isn_dst;
 	/* isn from src */
 	uint16_t isn_src;
-	
+	/* 0: new connection to be established; 1: connection established 
+	 * -1: connection pending */
 	int established;
+	
+	/* The unsocilidated packet and its length*/
+	uint8_t *pending_packet;
+	unsigned int len;
 	
 	time_t last_updated;
 	
@@ -52,6 +58,7 @@ struct sr_nat {
   uint16_t icmp_timeout;
   uint16_t tcp_establish_timeout;
   uint16_t tcp_transitory_timeout;
+  uint16_t tcp_unsolicited_syn_timeout;
   
   struct sr_if *int_iface;
   struct sr_if *ext_iface;
@@ -64,7 +71,7 @@ struct sr_nat {
 };
 
 
-int   sr_nat_init(struct sr_nat *nat);     /* Initializes the nat */
+int   sr_nat_init(struct sr_instance *sr);     /* Initializes the nat */
 int   sr_nat_destroy(struct sr_nat *nat);  /* Destroys the nat (free memory) */
 void *sr_nat_timeout(void *nat_ptr);  /* Periodic Timout */
 
@@ -85,7 +92,8 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
 
 struct sr_nat_connection *sr_nat_lookup_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint32_t ip_src, uint16_t port_src, uint32_t ip_dst, uint16_t port_dst);
   
-void sr_nat_add_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint32_t ip_src, uint16_t port_src, uint32_t ip_dst, uint16_t port_dst, uint16_t isn_src);
+void sr_nat_add_connection(struct sr_nat *nat, struct sr_nat_mapping *copy, uint32_t ip_src, uint16_t port_src, uint32_t ip_dst, uint16_t port_dst, uint16_t isn_src, int established, 
+uint8_t *pending_packet, unsigned int len);
   
 int sr_nat_establish_connection(struct sr_nat *nat,
   struct sr_nat_mapping *copy, struct sr_nat_connection *con_copy);

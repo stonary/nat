@@ -203,32 +203,3 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
     fprintf(stderr, "Unrecognized Ethernet Type: %d\n", ethtype);
   }
 }
-
-uint16_t tcp_cksum (const void * addr, unsigned len, uint16_t init) {
-	uint32_t sum;
-	const uint16_t * word;
-
-	sum = init;
-	word = addr;
-
-  /*
-   * Our algorithm is simple, using a 32 bit accumulator (sum), we add
-   * sequential 16 bit words to it, and at the end, fold back all the
-   * carry bits from the top 16 bits into the lower 16 bits.
-   */
-
-	while (len >= 2) {
-		sum += *(word++);
-		len -= 2;
-	}
-
-	if (len > 0) {
-		uint16_t tmp;
-
-		*(uint8_t *)(&tmp) = *(uint8_t *)word;
-	}
-
-	sum = (sum >> 16) + (sum & 0xffff);
-	sum += (sum >> 16);
-	return ((uint16_t)~sum);
-}

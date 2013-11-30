@@ -72,6 +72,12 @@ void sr_init(struct sr_instance*);
 void sr_enable_NAT(struct sr_instance* sr, int nat_enable);
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
 void sr_handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req);
+void sr_sendICMPMsg(struct sr_instance * sr,
+		    uint8_t icmp_type,
+		    uint8_t icmp_code,
+		    char * interface, 
+		    uint8_t * old_packet,
+		    unsigned int len);
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );
 void sr_set_ether_ip(struct sr_instance* , uint32_t );
