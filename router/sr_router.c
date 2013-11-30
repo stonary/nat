@@ -101,6 +101,8 @@ void sr_init(struct sr_instance* sr)
 		fprintf(stderr, "Failed loading routing table..");
 		return;
 	}
+	
+	sr->nat_enable = 0;
 
 } /* -- sr_init -- */
 
@@ -243,9 +245,12 @@ void sr_handlepacket(struct sr_instance* sr,
 					return;
 				}
 
-				if (sr->nat_enable && (strcmp(interface,sr->nat->int_iface->name) == 0)) {
-					sr_sendNATpacket(sr, packet, len, interface);
-					return;
+			
+				if (sr->nat_enable) {
+					if (strcmp(interface,sr->nat->int_iface->name) == 0){
+						sr_sendNATpacket(sr, packet, len, interface);
+						return;
+					}
 				}
 				sr_handleIPforwarding(sr, packet, len, interface);
 				return;
