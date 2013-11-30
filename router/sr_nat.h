@@ -98,5 +98,9 @@ uint8_t *pending_packet, unsigned int len);
 int sr_nat_establish_connection(struct sr_nat *nat,
   struct sr_nat_mapping *copy, struct sr_nat_connection *con_copy);
 
+void sr_nat_refresh_mapping_time(struct sr_nat *nat, struct sr_nat_mapping *copy);
+
+void sr_nat_refresh_connection_time(struct sr_nat *nat, struct sr_nat_mapping *copy, struct sr_nat_connection* con_copy);
+
 int sr_update_isn(struct sr_nat *nat, struct sr_nat_mapping *copy, struct sr_nat_connection *con_copy, uint16_t isn_src, uint16_t isn_dst);
 #endif

@@ -45,12 +45,12 @@ extern char* optarg;
 #define DEFAULT_SERVER "localhost"
 #define DEFAULT_RTABLE "rtable"
 #define DEFAULT_TOPO 0
-/* Changes here */
+/* NAT variables */
 #define DEFAULT_ICMP_MAPPING_TIMEOUT 60
 #define DEFAULT_TCP_SYN_TIMEOUT 7440
 #define DEFAULT_TCP_TRANS_IDLE_TIMEOUT 300
 #define DEFAULT_TCP_UNSOLICITED_INBOUND_SYN 6
-/* TODO simply mark this for now, there's probably a better way */
+/* Whether NAT was set */
 #define DEFAULT_NAT 0
 
 static void usage(char* );
@@ -77,7 +77,6 @@ int main(int argc, char **argv)
 	char *logfile = 0;
 	/**
 	 * NAT settings over here:
-	 * (sign/unsiged int - does it matter here?)
 	 */
 	unsigned int icmp_mto = DEFAULT_ICMP_MAPPING_TIMEOUT;
 	unsigned int tcp_syn_mto = DEFAULT_TCP_SYN_TIMEOUT;
@@ -122,7 +121,6 @@ int main(int argc, char **argv)
 			template = optarg;
 			break;
 		case 'n':
-			/*TODO probably just call sr_nat_init here..*/
 			nat = 1;
 			printf("nat: %d\n", nat);
 			break;
@@ -205,12 +203,14 @@ int main(int argc, char **argv)
 	/* call router init (for arp subsystem etc.) */
 	
 	sr_init(&sr);
-	if ( sr_read_from_server(&sr) == 1){sr_enable_NAT(&sr,nat);};
+	if (sr_read_from_server(&sr) == 1){ if (nat ) {sr_enable_NAT(&sr,nat);}}
 	/* -- whizbang main loop ;-) */
 	while( sr_read_from_server(&sr) == 1);
-	/*TODO if nan is enabled, need to call sr_nat_destroy here as well */
+	/* If nat is enabled, destory the instance*/
+	if ((&sr)->nat_enable) {
+		sr_nat_destroy((&sr)->nat);
+	}
 	sr_destroy_instance(&sr);
-
 	return 0;
 }/* -- main -- */
 
@@ -271,7 +271,6 @@ static void sr_destroy_instance(struct sr_instance* sr)
 	{
 		sr_dump_close(sr->logfile);
 	}
-
 	/*
     fprintf(stderr,"sr_destroy_instance leaking memory\n");
 	 */
