@@ -142,10 +142,11 @@ void sr_handlepacket(struct sr_instance* sr,
 	assert(sr);
 	assert(packet);
 	assert(interface);
-
+	/*
 	printf("\n*********Raw*************\n");
 	print_hdrs(packet, len);
 	printf("**********************\n\n");
+	*/
 	/* fill in code here */
 	int result;
 
@@ -200,7 +201,7 @@ void sr_handlepacket(struct sr_instance* sr,
 				/* If it's an ICMP protocol */
 
 				if (sr->nat_enable){
-					fprintf(stderr, "NAT enabled\n");
+					/*fprintf(stderr, "NAT enabled\n");*/
 					/* Some one send packet to NAT client*/
 					if (strcmp(interface,sr->nat->ext_iface->name) == 0) {
 						sr_receiveNATpacket(sr, packet, len, interface);
@@ -235,6 +236,7 @@ void sr_handlepacket(struct sr_instance* sr,
 					return;
 				} else {
 					/* This is not a ping or TCP/UDP ip packet, just return*/
+					
 					return;
 				}
 			}else{
@@ -787,7 +789,7 @@ sr_sendNATpacket(struct sr_instance* sr,
 			   char* interface/* lent */)
 {
 	/* NAT before forwarding */
-	printf("Send NAT\n");
+	/*printf("Send NAT\n");*/
 
 	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
 
@@ -797,7 +799,7 @@ sr_sendNATpacket(struct sr_instance* sr,
 		struct sr_nat_mapping *tmp;
 		sr_nat_mapping_type packet_type;
 
-		print_hdrs(packet,len);
+		/*print_hdrs(packet,len);*/
 
 		switch (iphdr->ip_p){
 			case ip_protocol_icmp:
@@ -892,9 +894,7 @@ sr_sendNATpacket(struct sr_instance* sr,
 				break;
 		}
 	}
-
-	print_hdrs(packet,len);
-
+	/*print_hdrs(packet,len);*/
 	sr_handleIPforwarding(sr, packet, len, interface);
 
 	return;
@@ -907,8 +907,9 @@ sr_receiveNATpacket(struct sr_instance* sr,
 			   char* interface/* lent */)
 {
 	/* NAT before forwarding */
+	/*
 	printf("******\n\nReceiving NAT packet\n\n******");
-	print_hdrs(packet, len);
+	print_hdrs(packet, len);*/
 	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
 
 	/* If the packet comes from external interface */
@@ -1004,7 +1005,7 @@ sr_receiveNATpacket(struct sr_instance* sr,
 				break;
 		}
 	}
-	print_hdrs(packet, len);
+	/*print_hdrs(packet, len);*/
 	sr_handleIPforwarding(sr, packet, len, interface);
 	return;
 }
